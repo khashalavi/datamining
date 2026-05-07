@@ -1,0 +1,4 @@
+datasets>=3.0.0
+huggingface-hub>=0.20.0
+jupyter>=1.0.0
+ipykernel>=6.0.0

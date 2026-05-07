@@ -1,0 +1,6 @@
+pyproject.toml
+snli_project.egg-info/PKG-INFO
+snli_project.egg-info/SOURCES.txt
+snli_project.egg-info/dependency_links.txt
+snli_project.egg-info/requires.txt
+snli_project.egg-info/top_level.txt
