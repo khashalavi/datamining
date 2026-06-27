@@ -7,7 +7,7 @@ if torch.cuda.is_available():
     print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 
 
-    # Cell 2: Imports
+# Cell 2: Imports
 import os
 import json
 import torch
@@ -31,8 +31,9 @@ if torch.cuda.is_available():
 # Cell 3: Configuration
 MODEL_NAME = "Qwen/Qwen3-1.7B"
 # MODEL_NAME = "Qwen/Qwen3-0.6B"
-OUTPUT_DIR = f"./{MODEL_NAME}_finetuned"
-LOG_FILE = f"./{OUTPUT_DIR}/training_losses.txt"
+MODEL_SLUG = MODEL_NAME.split("/")[-1]          # e.g. "Qwen3-1.7B"
+OUTPUT_DIR = f"./models/{MODEL_SLUG}"
+LOG_FILE = f"{OUTPUT_DIR}/training_losses.txt"
 MAX_LENGTH = 128
 TRAIN_SAMPLES = 50000   # Adjust based on your GPU/time constraints
 VAL_SAMPLES = 5000
@@ -226,9 +227,10 @@ print(f"Losses saved to: {LOG_FILE}")
 
 
 # Cell 10: Save final model
-trainer.save_model(os.path.join(OUTPUT_DIR, "final_model"))
-tokenizer.save_pretrained(os.path.join(OUTPUT_DIR, "final_model"))
-print(f"Model saved to: {os.path.join(OUTPUT_DIR, 'final_model')}")
+FINAL_MODEL_DIR = os.path.join(OUTPUT_DIR, "final_model")
+trainer.save_model(FINAL_MODEL_DIR)
+tokenizer.save_pretrained(FINAL_MODEL_DIR)
+print(f"Model saved to: {FINAL_MODEL_DIR}")
 
 
 # Cell 11: Visualize training and validation losses
@@ -262,28 +264,83 @@ ax.legend(fontsize=12)
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig("./loss_plot.png", dpi=150, bbox_inches="tight")
+loss_plot_path = os.path.join(OUTPUT_DIR, "loss_plot.png")
+plt.savefig(loss_plot_path, dpi=150, bbox_inches="tight")
 plt.show()
 
-print("Plot saved to: ./loss_plot.png")
+print(f"Plot saved to: {loss_plot_path}")
 
 
-# Cell 12: Quick inference test
+# Cell 12: Evaluate on test set and save predictions to Excel
+import pandas as pd
+
 model.config.use_cache = True
 model.eval()
 
-test_prompt = "Premis: A man is playing guitar on stage. Hypothesis: A man is performing music. Label:"
+# Use left-padding for batch inference with causal LM
+tokenizer.padding_side = "left"
 
-inputs = tokenizer(test_prompt, return_tensors="pt").to(model.device)
+VALID_LABELS = {"entailment", "neutral", "contradiction"}
+INFER_BATCH_SIZE = 16
 
-with torch.no_grad():
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=5,
-        do_sample=False,
-        temperature=1.0,
-    )
+test_dataset = dataset["test"]
 
-response = tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
-print(f"Prompt: {test_prompt}")
-print(f"Prediction: {response.strip()}")
+def predict_batch(premises, hypotheses):
+    prompts = [
+        f"Premis: {p}. Hypothesis: {h}. Label:"
+        for p, h in zip(premises, hypotheses)
+    ]
+    inputs = tokenizer(
+        prompts,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=MAX_LENGTH,
+    ).to(model.device)
+
+    with torch.no_grad():
+        out = model.generate(
+            **inputs,
+            max_new_tokens=5,
+            do_sample=False,
+            temperature=1.0,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+
+    preds = []
+    for seq in out:
+        new_tokens = seq[inputs["input_ids"].shape[1]:]
+        text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip().lower()
+        first_word = text.split()[0] if text.split() else ""
+        if first_word in VALID_LABELS:
+            preds.append(first_word)
+        else:
+            # substring fallback
+            matched = next((l for l in VALID_LABELS if l in text), "unknown")
+            preds.append(matched)
+    return preds
+
+rows = []
+n = len(test_dataset)
+print(f"Running inference on {n} test examples...")
+for start in range(0, n, INFER_BATCH_SIZE):
+    end = min(start + INFER_BATCH_SIZE, n)
+    batch = test_dataset.select(range(start, end))
+    premises = batch["premise"]
+    hypotheses = batch["hypothesis"]
+    labels = [LABEL_MAP[l] for l in batch["label"]]
+    preds = predict_batch(premises, hypotheses)
+    for p, h, lbl, pred in zip(premises, hypotheses, labels, preds):
+        rows.append({"premise": p, "hypothesis": h, "correct_label": lbl, "predicted_label": pred})
+    if (start // INFER_BATCH_SIZE) % 20 == 0:
+        print(f"  {end}/{n} done...")
+
+df = pd.DataFrame(rows)
+accuracy = (df["correct_label"] == df["predicted_label"]).mean()
+print(f"Test accuracy: {accuracy:.4f} ({accuracy*100:.2f}%)")
+
+results_dir = f"./results/{MODEL_SLUG}"
+os.makedirs(results_dir, exist_ok=True)
+results_path = os.path.join(results_dir, "finetuned_predictions.xlsx")
+df.to_excel(results_path, index=False)
+print(f"Predictions saved to: {results_path}")
