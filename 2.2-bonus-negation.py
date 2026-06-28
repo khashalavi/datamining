@@ -33,12 +33,12 @@ if torch.cuda.is_available():
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-BASE_MODEL_NAME  = "Qwen/Qwen3-1.7B"
-# BASE_MODEL_NAME = "Qwen/Qwen3-0.6B"
+# BASE_MODEL_NAME  = "Qwen/Qwen3-1.7B"
+BASE_MODEL_NAME = "Qwen/Qwen3-0.6B"
 MODEL_SLUG       = BASE_MODEL_NAME.split("/")[-1]
 FINETUNED_DIR    = f"./models/{MODEL_SLUG}/final_model"
 
-MAX_LENGTH       = 128
+MAX_LENGTH       = 256  # Increased to 256 to fit baseline instructions
 INFER_BATCH_SIZE = 16
 NUM_SAMPLES      = None   # set to an int (e.g. 500) to limit; None = full file
 
@@ -55,7 +55,7 @@ VALID_LABELS = set(LABEL_MAP.values())
 
 # ── Load negated dataset ───────────────────────────────────────────────────────
 # Check ./data/ first, then fall back to project root (from previous generation)
-ROOT_COPY = "./negated_validation_set.xlsx"
+ROOT_COPY = "./data/negated_validation_set.xlsx"
 if not os.path.exists(NEGATED_DATA_PATH) and os.path.exists(ROOT_COPY):
     shutil.copy(ROOT_COPY, NEGATED_DATA_PATH)
     print(f"Copied {ROOT_COPY} → {NEGATED_DATA_PATH}")
@@ -75,7 +75,7 @@ print(f"Columns: {list(df_raw.columns)}")
 df_raw = df_raw.dropna(subset=["negated_hypothesis"])
 
 # Exclude neutral examples (label == 1) — no well-defined negated gold label
-df_raw = df_raw[df_raw["label"] != 1].copy()
+df_raw = df_raw[df_raw["label"].isin([0, 2])].copy()
 
 # Compute negated gold label: entailment↔contradiction
 def flip_label(label_int):
@@ -110,12 +110,24 @@ def load_model_and_tokenizer(model_path_or_name: str):
     return mdl, tok
 
 
-def predict_batch(model, tokenizer, premises, neg_hypotheses):
-    # Prompt uses the NEGATED hypothesis
-    prompts = [
-        f"Premis: {p}. Hypothesis: {h}. Label:"
-        for p, h in zip(premises, neg_hypotheses)
-    ]
+def predict_batch(model, tokenizer, premises, neg_hypotheses, is_baseline=False):
+    # Branch prompt formats based on model type
+    if is_baseline:
+        prompts = [
+            f"Answer with exactly one word: 'entailment' (the premise proves the hypothesis is true), 'contradiction' (the premise proves the hypothesis is false), or 'neutral' (there is no definitive proof either way).\n\n"
+            f"Premise: {p}\n"
+            f"Hypothesis: {h}\n"
+            f"Label: "
+            for p, h in zip(premises, neg_hypotheses)
+        ]
+        max_tokens = 15
+    else:
+        prompts = [
+            f"Premis: {p}. Hypothesis: {h}. Label:"
+            for p, h in zip(premises, neg_hypotheses)
+        ]
+        max_tokens = 5
+
     inputs = tokenizer(
         prompts,
         return_tensors="pt",
@@ -127,7 +139,7 @@ def predict_batch(model, tokenizer, premises, neg_hypotheses):
     with torch.no_grad():
         out = model.generate(
             **inputs,
-            max_new_tokens=5,
+            max_new_tokens=max_tokens,
             do_sample=False,
             temperature=1.0,
             pad_token_id=tokenizer.pad_token_id,
@@ -137,18 +149,33 @@ def predict_batch(model, tokenizer, premises, neg_hypotheses):
     for seq in out:
         new_tokens = seq[inputs["input_ids"].shape[1]:]
         text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip().lower()
-        first_word = text.split()[0] if text.split() else ""
-        if first_word in VALID_LABELS:
-            preds.append(first_word)
+        
+        # Branch parsing logic based on model type
+        if is_baseline:
+            if "entail" in text:
+                preds.append("entailment")
+            elif "contradict" in text or "contr" in text:
+                preds.append("contradiction")
+            elif "neutral" in text:
+                preds.append("neutral")
+            else:
+                preds.append("unknown")
         else:
-            matched = next((l for l in VALID_LABELS if l in text), "unknown")
-            preds.append(matched)
+            first_word = text.split()[0] if text.split() else ""
+            if first_word in VALID_LABELS:
+                preds.append(first_word)
+            else:
+                matched = next((l for l in VALID_LABELS if l in text), "unknown")
+                preds.append(matched)
+                
     return preds
 
 
 def run_evaluation(model, tokenizer, dataset, label: str) -> pd.DataFrame:
     rows = []
     n = len(dataset)
+    is_baseline = (label == "baseline")
+    
     print(f"\nEvaluating [{label}] on {n} negated examples …")
     for start in range(0, n, INFER_BATCH_SIZE):
         end = min(start + INFER_BATCH_SIZE, n)
@@ -158,7 +185,9 @@ def run_evaluation(model, tokenizer, dataset, label: str) -> pd.DataFrame:
         neg_hyps        = batch["negated_hypothesis"]
         orig_labels     = [LABEL_MAP[l] for l in batch["label"]]
         gold_neg_labels = batch["negated_label_text"]
-        predicted       = predict_batch(model, tokenizer, premises, neg_hyps)
+        
+        predicted       = predict_batch(model, tokenizer, premises, neg_hyps, is_baseline=is_baseline)
+        
         for p, oh, nh, ol, gl, pr in zip(
             premises, orig_hyps, neg_hyps, orig_labels, gold_neg_labels, predicted
         ):
@@ -172,9 +201,13 @@ def run_evaluation(model, tokenizer, dataset, label: str) -> pd.DataFrame:
             })
         if (start // INFER_BATCH_SIZE) % 20 == 0:
             print(f"  {end}/{n} done …")
+            
     df = pd.DataFrame(rows)
     acc = (df["correct_label_negated"] == df["predicted_label"]).mean()
+    unknown_rate = (df["predicted_label"] == "unknown").mean()
+    
     print(f"  Accuracy on negated set: {acc:.4f} ({acc * 100:.2f}%)")
+    print(f"  Unknown rate: {unknown_rate:.4f} ({unknown_rate * 100:.2f}%)")
     return df
 
 

@@ -1,0 +1,84 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "multi_nli",
+  "dataset_size": 430987490,
+  "description": "",
+  "download_size": 224005223,
+  "features": {
+    "promptID": {
+      "dtype": "int32",
+      "_type": "Value"
+    },
+    "pairID": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "premise": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "premise_binary_parse": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "premise_parse": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "hypothesis": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "hypothesis_binary_parse": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "hypothesis_parse": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "genre": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "names": [
+        "entailment",
+        "neutral",
+        "contradiction"
+      ],
+      "_type": "ClassLabel"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 654992713,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 410308482,
+      "num_examples": 392702,
+      "dataset_name": "multi_nli"
+    },
+    "validation_matched": {
+      "name": "validation_matched",
+      "num_bytes": 10066361,
+      "num_examples": 9815,
+      "dataset_name": "multi_nli"
+    },
+    "validation_mismatched": {
+      "name": "validation_mismatched",
+      "num_bytes": 10612647,
+      "num_examples": 9832,
+      "dataset_name": "multi_nli"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

@@ -22,12 +22,11 @@ if torch.cuda.is_available():
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-BASE_MODEL_NAME   = "Qwen/Qwen3-1.7B"
-# BASE_MODEL_NAME = "Qwen/Qwen3-0.6B"
-MODEL_SLUG        = BASE_MODEL_NAME.split("/")[-1]       # e.g. "Qwen3-1.7B"
+BASE_MODEL_NAME   = "Qwen/Qwen3-0.6B"
+MODEL_SLUG        = BASE_MODEL_NAME.split("/")[-1]       # e.g. "Qwen3-0.6B"
 FINETUNED_DIR     = f"./models/{MODEL_SLUG}/final_model"
 
-MAX_LENGTH        = 128
+MAX_LENGTH        = 256  # Increased to 256 to fit baseline instructions
 INFER_BATCH_SIZE  = 16
 NUM_SAMPLES       = None   # set to an int (e.g. 500) to limit; None = full split
 
@@ -79,11 +78,24 @@ def load_model_and_tokenizer(model_path_or_name: str):
     return mdl, tok
 
 
-def predict_batch(model, tokenizer, premises, hypotheses):
-    prompts = [
-        f"Premis: {p}. Hypothesis: {h}. Label:"
-        for p, h in zip(premises, hypotheses)
-    ]
+def predict_batch(model, tokenizer, premises, hypotheses, is_baseline=False):
+    # Branch prompt formats based on model type
+    if is_baseline:
+        prompts = [
+            f"Answer with exactly one word: 'entailment' (the premise proves the hypothesis is true), 'contradiction' (the premise proves the hypothesis is false), or 'neutral' (there is no definitive proof either way).\n\n"
+            f"Premise: {p}\n"
+            f"Hypothesis: {h}\n"
+            f"Label: "
+            for p, h in zip(premises, hypotheses)
+        ]
+        max_tokens = 15
+    else:
+        prompts = [
+            f"Premis: {p}. Hypothesis: {h}. Label:"
+            for p, h in zip(premises, hypotheses)
+        ]
+        max_tokens = 5
+
     inputs = tokenizer(
         prompts,
         return_tensors="pt",
@@ -95,7 +107,7 @@ def predict_batch(model, tokenizer, premises, hypotheses):
     with torch.no_grad():
         out = model.generate(
             **inputs,
-            max_new_tokens=5,
+            max_new_tokens=max_tokens,
             do_sample=False,
             temperature=1.0,
             pad_token_id=tokenizer.pad_token_id,
@@ -105,27 +117,44 @@ def predict_batch(model, tokenizer, premises, hypotheses):
     for seq in out:
         new_tokens = seq[inputs["input_ids"].shape[1]:]
         text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip().lower()
-        first_word = text.split()[0] if text.split() else ""
-        if first_word in VALID_LABELS:
-            preds.append(first_word)
+        
+        # Branch parsing logic based on model type
+        if is_baseline:
+            if "entail" in text:
+                preds.append("entailment")
+            elif "contradict" in text or "contr" in text:
+                preds.append("contradiction")
+            elif "neutral" in text:
+                preds.append("neutral")
+            else:
+                preds.append("unknown")
         else:
-            matched = next((l for l in VALID_LABELS if l in text), "unknown")
-            preds.append(matched)
+            first_word = text.split()[0] if text.split() else ""
+            if first_word in VALID_LABELS:
+                preds.append(first_word)
+            else:
+                matched = next((l for l in VALID_LABELS if l in text), "unknown")
+                preds.append(matched)
+                
     return preds
 
 
 def run_evaluation(model, tokenizer, dataset, label: str) -> pd.DataFrame:
     rows = []
     n = len(dataset)
+    is_baseline = (label == "baseline")
+    
     print(f"\nEvaluating [{label}] on {n} examples …")
     for start in range(0, n, INFER_BATCH_SIZE):
         end = min(start + INFER_BATCH_SIZE, n)
         batch = dataset.select(range(start, end))
         premises   = batch["premise"]
         hypotheses = batch["hypothesis"]
-        genres     = batch.get("genre", [""] * (end - start))
+        genres     = batch["genre"] if "genre" in batch.column_names else [""] * (end - start)
         correct    = [LABEL_MAP[l] for l in batch["label"]]
-        predicted  = predict_batch(model, tokenizer, premises, hypotheses)
+        
+        predicted  = predict_batch(model, tokenizer, premises, hypotheses, is_baseline=is_baseline)
+        
         for p, h, g, c, pr in zip(premises, hypotheses, genres, correct, predicted):
             rows.append({
                 "premise":         p,
@@ -136,9 +165,13 @@ def run_evaluation(model, tokenizer, dataset, label: str) -> pd.DataFrame:
             })
         if (start // INFER_BATCH_SIZE) % 20 == 0:
             print(f"  {end}/{n} done …")
+            
     df = pd.DataFrame(rows)
     acc = (df["correct_label"] == df["predicted_label"]).mean()
+    unknown_rate = (df["predicted_label"] == "unknown").mean()
+    
     print(f"  Accuracy: {acc:.4f} ({acc * 100:.2f}%)")
+    print(f"  Unknown rate: {unknown_rate:.4f} ({unknown_rate * 100:.2f}%)")
     return df
 
 

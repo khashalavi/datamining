@@ -18,7 +18,7 @@ from transformers import (
     AutoTokenizer,
     TrainingArguments,
     Trainer,
-    DataCollatorForLanguageModeling,
+    DataCollatorForLanguageModeling,con
     TrainerCallback,
 )
 
@@ -29,8 +29,8 @@ if torch.cuda.is_available():
 
 
 # Cell 3: Configuration
-MODEL_NAME = "Qwen/Qwen3-1.7B"
-# MODEL_NAME = "Qwen/Qwen3-0.6B"
+# MODEL_NAME = "Qwen/Qwen3-1.7B"
+MODEL_NAME = "Qwen/Qwen3-0.6B"
 MODEL_SLUG = MODEL_NAME.split("/")[-1]          # e.g. "Qwen3-1.7B"
 OUTPUT_DIR = f"./models/{MODEL_SLUG}"
 LOG_FILE = f"{OUTPUT_DIR}/training_losses.txt"

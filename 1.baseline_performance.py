@@ -11,8 +11,8 @@ if torch.cuda.is_available():
 
 
 # Configuration — change MODEL_NAME to evaluate a different base model
-MODEL_NAME = "Qwen/Qwen3-1.7B"
-# MODEL_NAME = "Qwen/Qwen3-0.6B"
+# MODEL_NAME = "Qwen/Qwen3-1.7B"
+MODEL_NAME = "Qwen/Qwen3-0.6B"
 MODEL_SLUG = MODEL_NAME.split("/")[-1]
 MAX_LENGTH = 128
 INFER_BATCH_SIZE = 16
@@ -52,7 +52,10 @@ print(f"Test examples: {len(dataset)}")
 
 def predict_batch(premises, hypotheses):
     prompts = [
-        f"Premis: {p}. Hypothesis: {h}. Label:"
+        f"Answer with exactly one word: 'entailment' (the premise proves the hypothesis is true), 'contradiction' (the premise proves the hypothesis is false), or 'neutral' (there is no definitive proof either way).\n\n"
+        f"Premise: {p}\n"
+        f"Hypothesis: {h}\n"
+        f"Label: "  
         for p, h in zip(premises, hypotheses)
     ]
     inputs = tokenizer(
@@ -66,22 +69,30 @@ def predict_batch(premises, hypotheses):
     with torch.no_grad():
         out = model.generate(
             **inputs,
-            max_new_tokens=5,
+            max_new_tokens=15,  
             do_sample=False,
             temperature=1.0,
             pad_token_id=tokenizer.pad_token_id,
         )
 
     preds = []
-    for seq in out:
+    for i, seq in enumerate(out):
         new_tokens = seq[inputs["input_ids"].shape[1]:]
         text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip().lower()
-        first_word = text.split()[0] if text.split() else ""
-        if first_word in VALID_LABELS:
-            preds.append(first_word)
+        
+        if i == 0: 
+            print(f"\n[DEBUG] Raw output: '{text}'")
+
+        # Smart parsing for base model hallucinations
+        if "entail" in text:  # Catches entailment, entailing, entailed
+            preds.append("entailment")
+        elif "contradict" in text or "contr" in text: # Catches contradiction, contr
+            preds.append("contradiction")
+        elif "neutral" in text:
+            preds.append("neutral")
         else:
-            matched = next((l for l in VALID_LABELS if l in text), "unknown")
-            preds.append(matched)
+            preds.append("unknown")
+            
     return preds
 
 
