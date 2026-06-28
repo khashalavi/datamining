@@ -23,8 +23,8 @@ import tempfile
 import subprocess
 
 # ── The only setting you need to change ──────────────────────────────────────
-MODEL_NAME = "Qwen/Qwen3-0.6B"
-# MODEL_NAME = "Qwen/Qwen3-1.7B"
+# MODEL_NAME = "Qwen/Qwen3-0.6B"
+MODEL_NAME = "Qwen/Qwen3-1.7B"
 # ─────────────────────────────────────────────────────────────────────────────
 
 SCRIPTS = [
