@@ -348,14 +348,40 @@ substring search is tried.  If that also fails the prediction is recorded as
 
 ## Running the Full Pipeline
 
+### Option A — One command (recommended)
+
+Set the model name once in `run_pipeline.py` and execute everything:
+
+```python
+# run_pipeline.py — only line you need to edit
+MODEL_NAME = "Qwen/Qwen3-0.6B"   # or "Qwen/Qwen3-1.7B"
+```
+
+```powershell
+cd snli-project && .\.venv\Scripts\Activate.ps1 && cd ..
+python run_pipeline.py
+```
+
+`run_pipeline.py` patches `MODEL_NAME` / `BASE_MODEL_NAME` into each child
+script before running it, so every script automatically uses the same model.
+It skips the negation step if the negated dataset is not found yet, and asks
+whether to continue if any step fails.
+
+At the end it prints a summary table with the status and wall-clock time of
+every step.
+
+---
+
+### Option B — Step by step
+
 ```powershell
 # 1. Activate environment
 cd snli-project && .\.venv\Scripts\Activate.ps1 && cd ..
 
-# 2. Fine-tune (writes models/Qwen3-1.7B/ and results/Qwen3-1.7B/finetuned_predictions.xlsx)
+# 2. Fine-tune (writes models/Qwen3-0.6B/ and results/Qwen3-0.6B/finetuned_predictions.xlsx)
 python 0.finetuning_pipeline.py
 
-# 3. Zero-shot baseline (writes results/Qwen3-1.7B/baseline.xlsx)
+# 3. Zero-shot baseline (writes results/Qwen3-0.6B/baseline.xlsx)
 python 1.baseline_performance.py
 
 # 4a. Generate negated dataset — only needed once (requires NVIDIA_API_KEY)
