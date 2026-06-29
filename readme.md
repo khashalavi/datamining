@@ -129,13 +129,7 @@ cd snli-project
 cd ..
 ```
 
-### Environment variable (negation generation only)
 
-Create a `.env` file in the project root:
-
-```
-NVIDIA_API_KEY=<your key from build.nvidia.com>
-```
 
 ---
 
