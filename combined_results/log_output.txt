@@ -1,0 +1,35 @@
+
+
+────────────────────────────────────────────────────────────
+[RUN ] 3.combine_results.py
+────────────────────────────────────────────────────────────
+  Qwen3-0.6B | Baseline   | NLI Classification        | acc=0.3555  f1=0.2043
+  Qwen3-0.6B | Fine-tuned | NLI Classification        | acc=0.8825  f1=0.8822
+  Qwen3-0.6B | Baseline   | Generalization            | acc=0.3694  f1=0.2146
+  Qwen3-0.6B | Fine-tuned | Generalization            | acc=0.7941  f1=0.7923
+  Qwen3-0.6B | Baseline   | Negation Robustness       | acc=0.4444  f1=0.3232
+  Qwen3-0.6B | Fine-tuned | Negation Robustness       | acc=0.5506  f1=0.4701
+  Qwen3-1.7B | Baseline   | NLI Classification        | acc=0.4129  f1=0.3137
+  Qwen3-1.7B | Fine-tuned | NLI Classification        | acc=0.9043  f1=0.9039
+  Qwen3-1.7B | Baseline   | Generalization            | acc=0.3794  f1=0.2721
+  Qwen3-1.7B | Fine-tuned | Generalization            | acc=0.8383  f1=0.8345
+  Qwen3-1.7B | Baseline   | Negation Robustness       | acc=0.3537  f1=0.3206
+  Qwen3-1.7B | Fine-tuned | Negation Robustness       | acc=0.6010  f1=0.5546
+
+Saved 12 rows →
+  ./results\combined_results\final_table.xlsx
+  ./results\combined_results\final_table.csv
+
+     model model_type                task                  dataset  accuracy  precision  recall  f1_macro  n_examples  n_unknown
+Qwen3-0.6B   Baseline      Generalization Multi-NLI val_mismatched    0.3694     0.2253  0.3509    0.2146        9832        112
+Qwen3-0.6B Fine-tuned      Generalization Multi-NLI val_mismatched    0.7941     0.7934  0.7920    0.7923        9832          2
+Qwen3-1.7B   Baseline      Generalization Multi-NLI val_mismatched    0.3794     0.4349  0.3653    0.2721        9832        441
+Qwen3-1.7B Fine-tuned      Generalization Multi-NLI val_mismatched    0.8383     0.8384  0.8350    0.8345        9832          0
+Qwen3-0.6B   Baseline  NLI Classification                SNLI Test    0.3555     0.1973  0.3462    0.2043        9824         55
+Qwen3-0.6B Fine-tuned  NLI Classification                SNLI Test    0.8825     0.8821  0.8822    0.8822        9824          0
+Qwen3-1.7B   Baseline  NLI Classification                SNLI Test    0.4129     0.4309  0.4061    0.3137        9824        357
+Qwen3-1.7B Fine-tuned  NLI Classification                SNLI Test    0.9043     0.9039  0.9041    0.9039        9824          0
+Qwen3-0.6B   Baseline Negation Robustness        Multi-NLI negated    0.4444     0.7528  0.4468    0.3232        6607         45
+Qwen3-0.6B Fine-tuned Negation Robustness        Multi-NLI negated    0.5506     0.6758  0.5475    0.4701        6607          0
+Qwen3-1.7B   Baseline Negation Robustness        Multi-NLI negated    0.3537     0.6084  0.3619    0.3206        6607        449
+Qwen3-1.7B Fine-tuned Negation Robustness        Multi-NLI negated    0.6010     0.7210  0.5983    0.5546        6607          0
